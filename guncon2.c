@@ -66,18 +66,20 @@ static void guncon2_usb_irq(struct urb *urb)
     input_report_abs(guncon2->input, ABS_Y, (data[5] << 8) | data[4]);
 
     // d-pad
-    input_report_key(guncon2->input, BTN_DPAD_LEFT, (data[0] ^ 0xff) & BIT(7));
+    input_report_key(guncon2->input, BTN_DPAD_LEFT,  (data[0] ^ 0xff) & BIT(7));
     input_report_key(guncon2->input, BTN_DPAD_RIGHT, (data[0] ^ 0xff) & BIT(5));
-    input_report_key(guncon2->input, BTN_DPAD_UP, (data[0] ^ 0xff) & BIT(4));
-    input_report_key(guncon2->input, BTN_DPAD_DOWN, (data[0] ^ 0xff) & BIT(6));
+    input_report_key(guncon2->input, BTN_DPAD_UP,    (data[0] ^ 0xff) & BIT(4));
+    input_report_key(guncon2->input, BTN_DPAD_DOWN,  (data[0] ^ 0xff) & BIT(6));
 
     // buttons
     input_report_key(guncon2->input, BTN_TRIGGER, (data[1] ^ 0xff) & BIT(5));
-    input_report_key(guncon2->input, BTN_A, (data[0] ^ 0xff) & BIT(3));
-    input_report_key(guncon2->input, BTN_B, (data[0] ^ 0xff) & BIT(2));
-    input_report_key(guncon2->input, BTN_C, (data[0] ^ 0xff) & BIT(1));
-    input_report_key(guncon2->input, BTN_START, (data[1] ^ 0xff) & BIT(7));
-    input_report_key(guncon2->input, BTN_SELECT, (data[1] ^ 0xff) & BIT(6));
+    input_report_key(guncon2->input, BTN_A,       (data[0] ^ 0xff) & BIT(3));
+    input_report_key(guncon2->input, BTN_B,       (data[0] ^ 0xff) & BIT(2));
+    input_report_key(guncon2->input, BTN_C,       (data[0] ^ 0xff) & BIT(1));
+    input_report_key(guncon2->input, BTN_START,   (data[1] ^ 0xff) & BIT(7));
+    input_report_key(guncon2->input, BTN_SELECT,  (data[1] ^ 0xff) & BIT(6));
+
+    input_sync(guncon2->input);
   }
 
   exit:
