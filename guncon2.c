@@ -35,6 +35,9 @@ static void guncon2_usb_irq(struct urb *urb)
   struct guncon2 *guncon2 = urb->context;
   unsigned char *data = urb->transfer_buffer;
   int error;
+  unsigned short x;
+  unsigned short y;
+  unsigned char trigger;
 
   switch (urb->status) {
   case 0:
@@ -62,8 +65,10 @@ static void guncon2_usb_irq(struct urb *urb)
 
   if (urb->actual_length == 6) {
     // Aiming
-    input_report_abs(guncon2->input, ABS_X, (data[3] << 8) | data[2]);
-    input_report_abs(guncon2->input, ABS_Y, (data[5] << 8) | data[4]);
+    x = (data[3] << 8) | data[2];
+    y = (data[5] << 8) | data[4];
+    input_report_abs(guncon2->input, ABS_X, x);
+    input_report_abs(guncon2->input, ABS_Y, y);
 
     // d-pad
     input_report_key(guncon2->input, BTN_DPAD_LEFT,  (data[0] ^ 0xff) & BIT(7));
@@ -72,7 +77,20 @@ static void guncon2_usb_irq(struct urb *urb)
     input_report_key(guncon2->input, BTN_DPAD_DOWN,  (data[0] ^ 0xff) & BIT(6));
 
     // buttons
-    input_report_key(guncon2->input, BTN_TRIGGER, (data[1] ^ 0xff) & BIT(5));
+    trigger = (unsigned char) ((data[1] ^ 0xff) & BIT(5) ? 1 : 0);
+    if (x < 10 || y < 10)
+    {
+      /* if the gun is pointed off screen */
+      input_report_key(guncon2->input, BTN_TR, trigger);  /* reload */
+      input_report_key(guncon2->input, BTN_TL, 0);        /* trigger */
+    }
+    else
+    {
+      /* on screen */
+      input_report_key(guncon2->input, BTN_TL, trigger);  /* trigger */
+      input_report_key(guncon2->input, BTN_TR, 0);        /* reload */
+    }
+
     input_report_key(guncon2->input, BTN_A,       (data[0] ^ 0xff) & BIT(3));
     input_report_key(guncon2->input, BTN_B,       (data[0] ^ 0xff) & BIT(2));
     input_report_key(guncon2->input, BTN_C,       (data[0] ^ 0xff) & BIT(1));
@@ -194,17 +212,18 @@ static int guncon2_probe(struct usb_interface *intf,
   guncon2->input->open = guncon2_open;
   guncon2->input->close = guncon2_close;
 
-  input_set_capability(guncon2->input, EV_KEY, BTN_TRIGGER);
+  input_set_capability(guncon2->input, EV_KEY, BTN_TL);  /* regular trigger */
+  input_set_capability(guncon2->input, EV_KEY, BTN_TR);  /* off screen reload trigger */
   input_set_capability(guncon2->input, EV_KEY, BTN_A);
   input_set_capability(guncon2->input, EV_KEY, BTN_B);
   input_set_capability(guncon2->input, EV_KEY, BTN_C);
   input_set_capability(guncon2->input, EV_KEY, BTN_START);
   input_set_capability(guncon2->input, EV_KEY, BTN_SELECT);
 
-  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_LEFT);
-  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_RIGHT);
   input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_UP);
   input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_DOWN);
+  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_LEFT);
+  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_RIGHT);
 
   /* min, max, fuzz, flat */
   input_set_abs_params(guncon2->input, ABS_X, 0, 255, 0, 0);
