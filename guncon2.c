@@ -241,7 +241,7 @@ static int guncon2_probe(struct usb_interface *intf,
   /* min, max, fuzz, flat */
   input_set_capability(guncon2->input, EV_ABS, ABS_X);
   input_set_capability(guncon2->input, EV_ABS, ABS_Y);
-  input_set_abs_params(guncon2->input, ABS_X, 0, 255, 0, 0);
+  input_set_abs_params(guncon2->input, ABS_X, 77, 720, 0, 0);
   input_set_abs_params(guncon2->input, ABS_Y, 0, 255, 0, 0);
 
   input_set_drvdata(guncon2->input, guncon2);
