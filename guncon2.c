@@ -64,11 +64,28 @@ static void guncon2_usb_irq(struct urb *urb)
   }
 
   if (urb->actual_length == 6) {
-    // Aiming
+    // Aim and Trigger button
     x = (data[3] << 8) | data[2];
     y = (data[5] << 8) | data[4];
-    input_report_abs(guncon2->input, ABS_X, x);
-    input_report_abs(guncon2->input, ABS_Y, y);
+
+    trigger = (unsigned char) ((data[1] ^ 0xff) & BIT(5) ? 1 : 0);
+    if (x < 0x19 || y < 10)
+    {
+      /* if the gun is pointed off screen */
+      input_report_key(guncon2->input, BTN_LEFT, 0);         /* trigger */
+      input_report_key(guncon2->input, BTN_RIGHT, trigger);  /* reload */
+      /* TODO: report that pointer is off screen */
+    }
+    else
+    {
+      /* on screen */
+      input_report_key(guncon2->input, BTN_LEFT, trigger);   /* trigger */
+      input_report_key(guncon2->input, BTN_RIGHT, 0);        /* reload */
+
+      /* only update the position if the gun is on screen */
+      input_report_abs(guncon2->input, ABS_X, x);
+      input_report_abs(guncon2->input, ABS_Y, y);
+    }
 
     // d-pad
     input_report_key(guncon2->input, BTN_DPAD_LEFT,  (data[0] ^ 0xff) & BIT(7));
@@ -76,21 +93,14 @@ static void guncon2_usb_irq(struct urb *urb)
     input_report_key(guncon2->input, BTN_DPAD_UP,    (data[0] ^ 0xff) & BIT(4));
     input_report_key(guncon2->input, BTN_DPAD_DOWN,  (data[0] ^ 0xff) & BIT(6));
 
-    // buttons
-    trigger = (unsigned char) ((data[1] ^ 0xff) & BIT(5) ? 1 : 0);
-    if (x < 10 || y < 10)
-    {
-      /* if the gun is pointed off screen */
-      input_report_key(guncon2->input, BTN_TR, trigger);  /* reload */
-      input_report_key(guncon2->input, BTN_TL, 0);        /* trigger */
+    if ((data[0] ^ 0xff) & BIT(4)) {
+      input_report_rel(guncon2->input, REL_Y,(signed int)1);
     }
-    else
-    {
-      /* on screen */
-      input_report_key(guncon2->input, BTN_TL, trigger);  /* trigger */
-      input_report_key(guncon2->input, BTN_TR, 0);        /* reload */
+    if ((data[0] ^ 0xff) & BIT(6)) {
+      input_report_rel(guncon2->input, REL_Y, -1);
     }
 
+    // main buttons
     input_report_key(guncon2->input, BTN_A,       (data[0] ^ 0xff) & BIT(3));
     input_report_key(guncon2->input, BTN_B,       (data[0] ^ 0xff) & BIT(2));
     input_report_key(guncon2->input, BTN_C,       (data[0] ^ 0xff) & BIT(1));
@@ -212,8 +222,11 @@ static int guncon2_probe(struct usb_interface *intf,
   guncon2->input->open = guncon2_open;
   guncon2->input->close = guncon2_close;
 
-  input_set_capability(guncon2->input, EV_KEY, BTN_TL);  /* regular trigger */
-  input_set_capability(guncon2->input, EV_KEY, BTN_TR);  /* off screen reload trigger */
+  //__set_bit(INPUT_PROP_DIRECT, guncon2->input->propbit);
+  __set_bit(INPUT_PROP_POINTER, guncon2->input->propbit);
+
+  input_set_capability(guncon2->input, EV_KEY, BTN_LEFT);   /* regular trigger */
+  input_set_capability(guncon2->input, EV_KEY, BTN_RIGHT);  /* off screen reload trigger */
   input_set_capability(guncon2->input, EV_KEY, BTN_A);
   input_set_capability(guncon2->input, EV_KEY, BTN_B);
   input_set_capability(guncon2->input, EV_KEY, BTN_C);
@@ -226,6 +239,8 @@ static int guncon2_probe(struct usb_interface *intf,
   input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_RIGHT);
 
   /* min, max, fuzz, flat */
+  input_set_capability(guncon2->input, EV_ABS, ABS_X);
+  input_set_capability(guncon2->input, EV_ABS, ABS_Y);
   input_set_abs_params(guncon2->input, ABS_X, 0, 255, 0, 0);
   input_set_abs_params(guncon2->input, ABS_Y, 0, 255, 0, 0);
 
@@ -324,3 +339,4 @@ module_usb_driver(guncon2_driver);
 MODULE_AUTHOR("beardypig <beardypig@protonmail.com.com>");
 MODULE_DESCRIPTION("Namco GunCon 2");
 MODULE_LICENSE("GPL v2");
+
