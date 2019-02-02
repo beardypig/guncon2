@@ -72,15 +72,15 @@ static void guncon2_usb_irq(struct urb *urb)
     if (x < 0x19 || y < 10)
     {
       /* if the gun is pointed off screen */
-      input_report_key(guncon2->input, BT_LT, 0);         /* trigger */
-      input_report_key(guncon2->input, BTN_LR, trigger);  /* reload */
+      input_report_key(guncon2->input, BTN_LEFT, 0);         /* trigger */
+      input_report_key(guncon2->input, BTN_RIGHT, trigger);  /* reload */
       /* TODO: report that pointer is off screen */
     }
     else
     {
       /* on screen */
-      input_report_key(guncon2->input, BTN_LT, trigger);   /* trigger */
-      input_report_key(guncon2->input, BTN_LR, 0);        /* reload */
+      input_report_key(guncon2->input, BTN_LT, trigger);     /* trigger */
+      input_report_key(guncon2->input, BTN_RIGHT, 0);        /* reload */
 
       /* only update the position if the gun is on screen */
       input_report_abs(guncon2->input, ABS_X, x);
@@ -221,9 +221,12 @@ static int guncon2_probe(struct usb_interface *intf,
 
   guncon2->input->open = guncon2_open;
   guncon2->input->close = guncon2_close;
+
+  /* set as a pointer device */
+  __set_bit(INPUT_PROP_POINTER, guncon2->input->propbit);
   
-  input_set_capability(guncon2->input, EV_KEY, BT_LT);   /* regular trigger */
-  input_set_capability(guncon2->input, EV_KEY, BTN_LR);  /* off screen reload trigger */
+  input_set_capability(guncon2->input, EV_KEY, BTN_LEFT);   /* regular trigger */
+  input_set_capability(guncon2->input, EV_KEY, BTN_RIGHT);  /* off screen reload trigger */
   input_set_capability(guncon2->input, EV_KEY, BTN_A);
   input_set_capability(guncon2->input, EV_KEY, BTN_B);
   input_set_capability(guncon2->input, EV_KEY, BTN_C);
@@ -238,8 +241,8 @@ static int guncon2_probe(struct usb_interface *intf,
   /* min, max, fuzz, flat */
   input_set_capability(guncon2->input, EV_ABS, ABS_X);
   input_set_capability(guncon2->input, EV_ABS, ABS_Y);
-  input_set_abs_params(guncon2->input, ABS_X, 0x4D, 0x1CD, 0, 0);
-  input_set_abs_params(guncon2->input, ABS_Y, 0x20, 0x127, 0, 0);
+  input_set_abs_params(guncon2->input, ABS_X, 134, 576, 0, 0);
+  input_set_abs_params(guncon2->input, ABS_Y, 0, 240, 0, 0);
 
   input_set_drvdata(guncon2->input, guncon2);
 
