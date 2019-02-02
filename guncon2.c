@@ -79,7 +79,7 @@ static void guncon2_usb_irq(struct urb *urb)
     else
     {
       /* on screen */
-      input_report_key(guncon2->input, BTN_LT, trigger);     /* trigger */
+      input_report_key(guncon2->input, BTN_LEFT, trigger);     /* trigger */
       input_report_key(guncon2->input, BTN_RIGHT, 0);        /* reload */
 
       /* only update the position if the gun is on screen */
