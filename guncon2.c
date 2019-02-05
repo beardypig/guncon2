@@ -35,8 +35,9 @@ static void guncon2_usb_irq(struct urb *urb)
   struct guncon2 *guncon2 = urb->context;
   unsigned char *data = urb->transfer_buffer;
   int error;
-  unsigned short x;
-  unsigned short y;
+  unsigned short x, y;
+  signed char hat_x = 0;
+  signed char hat_y = 0;
   unsigned char trigger;
 
   switch (urb->status) {
@@ -88,10 +89,20 @@ static void guncon2_usb_irq(struct urb *urb)
     }
 
     // d-pad
-    input_report_key(guncon2->input, BTN_DPAD_LEFT,  !(data[0] & BIT(7)));
-    input_report_key(guncon2->input, BTN_DPAD_RIGHT, !(data[0] & BIT(5)));
-    input_report_key(guncon2->input, BTN_DPAD_UP,    !(data[0] & BIT(4)));
-    input_report_key(guncon2->input, BTN_DPAD_DOWN,  !(data[0] & BIT(6)));
+    if (!(data[0] & BIT(7))) { // left
+      hat_x -= 1;
+    }
+    if (!(data[0] & BIT(5))) { // right
+      hat_x += 1;
+    }
+    if (!(data[0] & BIT(4))) { // up
+      hat_y -= 1;
+    }
+    if (!(data[0] & BIT(6))) { // down
+      hat_y += 1;
+    }
+    input_report_abs(guncon2->input, ABS_HAT0X, hat_x);
+    input_report_abs(guncon2->input, ABS_HAT0Y, hat_y);
 
     // main buttons
     input_report_key(guncon2->input, BTN_A,       !(data[0] & BIT(3)));
@@ -223,18 +234,18 @@ static int guncon2_probe(struct usb_interface *intf,
   input_set_capability(guncon2->input, EV_KEY, BTN_START);
   input_set_capability(guncon2->input, EV_KEY, BTN_SELECT);
 
-  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_UP);
-  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_DOWN);
-  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_LEFT);
-  input_set_capability(guncon2->input, EV_KEY, BTN_DPAD_RIGHT);
-
-  /* min, max, fuzz, flat */
   input_set_capability(guncon2->input, EV_ABS, ABS_X);
   input_set_capability(guncon2->input, EV_ABS, ABS_Y);
+  input_set_capability(guncon2->input, EV_ABS, ABS_HAT0X);
+  input_set_capability(guncon2->input, EV_ABS, ABS_HAT0Y);
 
   // These ranges have been determined by experimentation
+  /* min, max, fuzz, flat */
   input_set_abs_params(guncon2->input, ABS_X, 100, 720, 0, 0);
   input_set_abs_params(guncon2->input, ABS_Y, 0, 240, 0, 0);
+  // d pad
+  input_set_abs_params(guncon2->input, ABS_HAT0X, -1, 1, 0, 0);
+  input_set_abs_params(guncon2->input, ABS_HAT0Y, -1, 1, 0, 0);
 
   input_set_drvdata(guncon2->input, guncon2);
 
