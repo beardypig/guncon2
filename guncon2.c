@@ -6,7 +6,6 @@
  *
  * Copyright (C) 2019 beardypig <beardypig@protonmail.com>
  */
-#define DEBUG 1
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/slab.h>
@@ -22,7 +21,7 @@
 #define GUNCON2_PRODUCT_ID  0x016a
 
 struct guncon2 {
-  struct input_dev      *input;
+  struct input_dev      *js;
   struct usb_interface  *intf;
   struct urb            *urb;
   struct mutex          pm_mutex;
@@ -73,19 +72,19 @@ static void guncon2_usb_irq(struct urb *urb)
     if (x < 0x19 || y < 10)
     {
       /* if the gun is pointed off screen */
-      input_report_key(guncon2->input, BTN_TL, 0);         /* trigger */
-      input_report_key(guncon2->input, BTN_TR, trigger);   /* reload */
+      input_report_key(guncon2->js, BTN_TL, 0);         /* trigger */
+      input_report_key(guncon2->js, BTN_TR, trigger);   /* reload */
       /* TODO: report that pointer is off screen */
     }
     else
     {
       /* on screen */
-      input_report_key(guncon2->input, BTN_TL, trigger);     /* trigger */
-      input_report_key(guncon2->input, BTN_TR, 0);           /* reload */
+      input_report_key(guncon2->js, BTN_TL, trigger);     /* trigger */
+      input_report_key(guncon2->js, BTN_TR, 0);           /* reload */
 
       /* only update the position if the gun is on screen */
-      input_report_abs(guncon2->input, ABS_X, x);
-      input_report_abs(guncon2->input, ABS_Y, y);
+      input_report_abs(guncon2->js, ABS_X, x);
+      input_report_abs(guncon2->js, ABS_Y, y);
     }
 
     // d-pad
@@ -101,17 +100,17 @@ static void guncon2_usb_irq(struct urb *urb)
     if (!(data[0] & BIT(6))) { // down
       hat_y += 1;
     }
-    input_report_abs(guncon2->input, ABS_HAT0X, hat_x);
-    input_report_abs(guncon2->input, ABS_HAT0Y, hat_y);
+    input_report_abs(guncon2->js, ABS_HAT0X, hat_x);
+    input_report_abs(guncon2->js, ABS_HAT0Y, hat_y);
 
     // main buttons
-    input_report_key(guncon2->input, BTN_A,       !(data[0] & BIT(3)));
-    input_report_key(guncon2->input, BTN_B,       !(data[0] & BIT(2)));
-    input_report_key(guncon2->input, BTN_C,       !(data[0] & BIT(1)));
-    input_report_key(guncon2->input, BTN_START,   !(data[1] & BIT(7)));
-    input_report_key(guncon2->input, BTN_SELECT,  !(data[1] & BIT(6)));
+    input_report_key(guncon2->js, BTN_A,       !(data[0] & BIT(3)));
+    input_report_key(guncon2->js, BTN_B,       !(data[0] & BIT(2)));
+    input_report_key(guncon2->js, BTN_C,       !(data[0] & BIT(1)));
+    input_report_key(guncon2->js, BTN_START,   !(data[1] & BIT(7)));
+    input_report_key(guncon2->js, BTN_SELECT,  !(data[1] & BIT(6)));
 
-    input_sync(guncon2->input);
+    input_sync(guncon2->js);
   }
 
   exit:
@@ -209,47 +208,47 @@ static int guncon2_probe(struct usb_interface *intf,
                    usb_rcvintpipe(udev, epirq->bEndpointAddress),
                    xfer_buf, xfer_size, guncon2_usb_irq, guncon2, 1);
 
-  guncon2->input = devm_input_allocate_device(&intf->dev);
-  if (!guncon2->input) {
+  guncon2->js = devm_input_allocate_device(&intf->dev);
+  if (!guncon2->js) {
     dev_err(&intf->dev, "couldn't allocate input device\n");
     return -ENOMEM;
   }
 
-  guncon2->input->name = "Namco GunCon 2";
+  guncon2->js->name = "Namco GunCon 2";
 
   usb_make_path(udev, guncon2->phys, sizeof(guncon2->phys));
   strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
-  guncon2->input->phys = guncon2->phys;
+  guncon2->js->phys = guncon2->phys;
 
-  usb_to_input_id(udev, &guncon2->input->id);
+  usb_to_input_id(udev, &guncon2->js->id);
 
-  guncon2->input->open = guncon2_open;
-  guncon2->input->close = guncon2_close;
+  guncon2->js->open = guncon2_open;
+  guncon2->js->close = guncon2_close;
 
-  input_set_capability(guncon2->input, EV_KEY, BTN_TL);   /* regular trigger */
-  input_set_capability(guncon2->input, EV_KEY, BTN_TR);  /* off screen reload trigger */
-  input_set_capability(guncon2->input, EV_KEY, BTN_A);
-  input_set_capability(guncon2->input, EV_KEY, BTN_B);
-  input_set_capability(guncon2->input, EV_KEY, BTN_C);
-  input_set_capability(guncon2->input, EV_KEY, BTN_START);
-  input_set_capability(guncon2->input, EV_KEY, BTN_SELECT);
+  input_set_capability(guncon2->js, EV_KEY, BTN_TL);   /* regular trigger */
+  input_set_capability(guncon2->js, EV_KEY, BTN_TR);  /* off screen reload trigger */
+  input_set_capability(guncon2->js, EV_KEY, BTN_A);
+  input_set_capability(guncon2->js, EV_KEY, BTN_B);
+  input_set_capability(guncon2->js, EV_KEY, BTN_C);
+  input_set_capability(guncon2->js, EV_KEY, BTN_START);
+  input_set_capability(guncon2->js, EV_KEY, BTN_SELECT);
 
-  input_set_capability(guncon2->input, EV_ABS, ABS_X);
-  input_set_capability(guncon2->input, EV_ABS, ABS_Y);
-  input_set_capability(guncon2->input, EV_ABS, ABS_HAT0X);
-  input_set_capability(guncon2->input, EV_ABS, ABS_HAT0Y);
+  input_set_capability(guncon2->js, EV_ABS, ABS_X);
+  input_set_capability(guncon2->js, EV_ABS, ABS_Y);
+  input_set_capability(guncon2->js, EV_ABS, ABS_HAT0X);
+  input_set_capability(guncon2->js, EV_ABS, ABS_HAT0Y);
 
   // These ranges have been determined by experimentation
   /* min, max, fuzz, flat */
-  input_set_abs_params(guncon2->input, ABS_X, 100, 720, 0, 0);
-  input_set_abs_params(guncon2->input, ABS_Y, 0, 240, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_X, 100, 720, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_Y, 0, 240, 0, 0);
   // d pad
-  input_set_abs_params(guncon2->input, ABS_HAT0X, -1, 1, 0, 0);
-  input_set_abs_params(guncon2->input, ABS_HAT0Y, -1, 1, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_HAT0X, -1, 1, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_HAT0Y, -1, 1, 0, 0);
 
-  input_set_drvdata(guncon2->input, guncon2);
+  input_set_drvdata(guncon2->js, guncon2);
 
-  error = input_register_device(guncon2->input);
+  error = input_register_device(guncon2->js);
   if (error)
     return error;
 
