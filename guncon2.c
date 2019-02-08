@@ -81,10 +81,6 @@ static void guncon2_usb_irq(struct urb *urb)
       /* on screen */
       input_report_key(guncon2->js, BTN_TL, trigger);     /* trigger */
       input_report_key(guncon2->js, BTN_TR, 0);           /* reload */
-
-      /* only update the position if the gun is on screen */
-      input_report_abs(guncon2->js, ABS_X, x);
-      input_report_abs(guncon2->js, ABS_Y, y);
     }
 
     // d-pad
@@ -233,15 +229,9 @@ static int guncon2_probe(struct usb_interface *intf,
   input_set_capability(guncon2->js, EV_KEY, BTN_START);
   input_set_capability(guncon2->js, EV_KEY, BTN_SELECT);
 
-  input_set_capability(guncon2->js, EV_ABS, ABS_X);
-  input_set_capability(guncon2->js, EV_ABS, ABS_Y);
   input_set_capability(guncon2->js, EV_ABS, ABS_HAT0X);
   input_set_capability(guncon2->js, EV_ABS, ABS_HAT0Y);
 
-  // These ranges have been determined by experimentation
-  /* min, max, fuzz, flat */
-  input_set_abs_params(guncon2->js, ABS_X, 100, 720, 0, 0);
-  input_set_abs_params(guncon2->js, ABS_Y, 0, 240, 0, 0);
   // d pad
   input_set_abs_params(guncon2->js, ABS_HAT0X, -1, 1, 0, 0);
   input_set_abs_params(guncon2->js, ABS_HAT0Y, -1, 1, 0, 0);
