@@ -37,7 +37,7 @@ static void guncon2_usb_irq(struct urb *urb)
   unsigned short x, y;
   signed char hat_x = 0;
   signed char hat_y = 0;
-  unsigned char trigger;
+  int trigger;
 
   switch (urb->status) {
   case 0:
@@ -66,22 +66,10 @@ static void guncon2_usb_irq(struct urb *urb)
   if (urb->actual_length == 6) {
     // Aim and Trigger button
     x = (data[3] << 8) | data[2];
-    y = (data[5] << 8) | data[4];
+    y = data[4];
+    trigger = !(data[1] & BIT(5));
 
-    trigger = (unsigned char) (!(data[1] & BIT(5)) ? 1 : 0);
-    if (x < 0x19 || y < 10)
-    {
-      /* if the gun is pointed off screen */
-      input_report_key(guncon2->js, BTN_TL, 0);         /* trigger */
-      input_report_key(guncon2->js, BTN_TR, trigger);   /* reload */
-      /* TODO: report that pointer is off screen */
-    }
-    else
-    {
-      /* on screen */
-      input_report_key(guncon2->js, BTN_TL, trigger);     /* trigger */
-      input_report_key(guncon2->js, BTN_TR, 0);           /* reload */
-    }
+    input_report_key(guncon2->js, BTN_TL, trigger);         /* trigger */
 
     // d-pad
     if (!(data[0] & BIT(7))) { // left
@@ -222,7 +210,7 @@ static int guncon2_probe(struct usb_interface *intf,
   guncon2->js->close = guncon2_close;
 
   input_set_capability(guncon2->js, EV_KEY, BTN_TL);   /* regular trigger */
-  input_set_capability(guncon2->js, EV_KEY, BTN_TR);  /* off screen reload trigger */
+  input_set_capability(guncon2->js, EV_KEY, BTN_TR);   /* off screen reload trigger */
   input_set_capability(guncon2->js, EV_KEY, BTN_A);
   input_set_capability(guncon2->js, EV_KEY, BTN_B);
   input_set_capability(guncon2->js, EV_KEY, BTN_C);
