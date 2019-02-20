@@ -52,6 +52,14 @@ struct guncon2 {
   char                  phys[64];
 };
 
+struct gc_mode {
+  unsigned char a;
+  unsigned char b;
+  unsigned char c;
+  unsigned char d;
+  unsigned char mode;
+};
+
 static void guncon2_usb_irq(struct urb *urb)
 {
   struct guncon2 *guncon2 = urb->context;
@@ -166,9 +174,23 @@ static void guncon2_usb_irq(struct urb *urb)
 
 static int guncon2_open(struct input_dev *input)
 {
+  struct gc_mode *gmode;
   struct guncon2 *guncon2 = input_get_drvdata(input);
+  struct usb_device *usb_dev = interface_to_usbdev(guncon2->intf);
   int retval;
   mutex_lock(&guncon2->pm_mutex);
+
+  gmode = kzalloc(sizeof(*gmode), GFP_KERNEL);
+  if (!gmode)
+    return -ENOMEM;
+
+  gmode->mode = 1;
+
+  usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
+      0x21, 0x09, 0x200, 0, gmode, sizeof(*gmode), 100000);
+
+  kfree(gmode);
+
   retval = usb_submit_urb(guncon2->urb, GFP_KERNEL);
   if (retval) {
     dev_err(&guncon2->intf->dev,
