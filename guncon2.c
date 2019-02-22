@@ -291,9 +291,6 @@ static int guncon2_probe(struct usb_interface *intf,
   strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
   guncon2->js->phys = guncon2->phys;
   usb_to_input_id(udev, &guncon2->js->id);
-
-  usb_make_path(udev, guncon2->phys, sizeof(guncon2->phys));
-  strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
   guncon2->mouse->phys = guncon2->phys;
   usb_to_input_id(udev, &guncon2->mouse->id);
 
@@ -329,6 +326,7 @@ static int guncon2_probe(struct usb_interface *intf,
   input_set_abs_params(guncon2->mouse, ABS_Y, 0, 255, 0, 0);
 
   input_set_drvdata(guncon2->js, guncon2);
+  input_set_drvdata(guncon2->mouse, guncon2);
 
   error = input_register_device(guncon2->js);
   if (error)
