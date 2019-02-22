@@ -52,7 +52,7 @@ struct guncon2 {
 };
 
 struct gc_mode {
-  unsigned char a;
+  unsigned short a;
   unsigned char b;
   unsigned char c;
   unsigned char d;
