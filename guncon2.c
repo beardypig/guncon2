@@ -21,7 +21,8 @@
 #define NAMCO_VENDOR_ID     0x0b9a
 #define GUNCON2_PRODUCT_ID  0x016a
 
-#define AXIS_MAX 65535
+#define X_AXIS_MAX 800
+#define Y_AXIS_MAX 255
 
 static bool offscreen_reload = 0;
 static ushort calibration_x0 = 80;
@@ -118,8 +119,8 @@ static void guncon2_usb_irq(struct urb *urb)
     /* TODO: report that pointer is off screen */
     if (!offscreen) {
       /* only update the position if the gun is on screen */
-      norm_x = (ushort)(((x - calibration_x0) * AXIS_MAX) / (calibration_x1 - calibration_x0));
-      norm_y = (ushort)(((y - calibration_y0) * AXIS_MAX) / (calibration_y1 - calibration_y0));
+      norm_x = (ushort)(((x - calibration_x0) * X_AXIS_MAX) / (calibration_x1 - calibration_x0));
+      norm_y = (ushort)(((y - calibration_y0) * Y_AXIS_MAX) / (calibration_y1 - calibration_y0));
 
       input_report_abs(guncon2->mouse, ABS_X, norm_x);
       input_report_abs(guncon2->mouse, ABS_Y, norm_y);
@@ -264,10 +265,12 @@ static int guncon2_probe(struct usb_interface *intf,
   input_set_capability(guncon2->mouse, EV_ABS, ABS_X);
   input_set_capability(guncon2->mouse, EV_ABS, ABS_Y);
 
-  /* these ranges are the normalised ranges */
+  /* these ranges are the normalised ranges, with aprox. 1% fuzz */
                                            /* min, max, fuzz, flat */
-  input_set_abs_params(guncon2->mouse, ABS_X, 0, AXIS_MAX, 0, 0);
-  input_set_abs_params(guncon2->mouse, ABS_Y, 0, AXIS_MAX, 0, 0);
+  input_set_abs_params(guncon2->mouse, ABS_X, 0, X_AXIS_MAX, 8, 0);
+  input_set_abs_params(guncon2->mouse, ABS_Y, 0, Y_AXIS_MAX, 3, 0);
+
+  input_set_drvdata(guncon2->mouse, guncon2);
 
   error = input_register_device(guncon2->mouse);
   if (error)
