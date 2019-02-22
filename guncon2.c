@@ -21,29 +21,27 @@
 #define NAMCO_VENDOR_ID     0x0b9a
 #define GUNCON2_PRODUCT_ID  0x016a
 
+#define AXIS_MAX 65535
+
 static bool offscreen_reload = 0;
-static bool raw = 0;
 static ushort calibration_x0 = 80;
 static ushort calibration_x1 = 734;
 static ushort calibration_y0 = 0;
 static ushort calibration_y1 = 240;
 
 module_param(offscreen_reload, bool, 0644);
-module_param(raw, bool, 0644);
 module_param(calibration_x0, ushort, 0644);
 module_param(calibration_x1, ushort, 0644);
 module_param(calibration_y0, ushort, 0644);
 module_param(calibration_y1, ushort, 0644);
 
 MODULE_PARM_DESC(offscreen_reload, "Enable off-screen reload");
-MODULE_PARM_DESC(raw, "Disable calibration");
 MODULE_PARM_DESC(calibration_x0, "Lower x calibration value");
 MODULE_PARM_DESC(calibration_y0, "Lower y calibration value");
 MODULE_PARM_DESC(calibration_x1, "Upper x calibration value");
 MODULE_PARM_DESC(calibration_y1, "Upper y calibration value");
 
 struct guncon2 {
-  struct input_dev      *js;
   struct input_dev      *mouse;
   struct usb_interface  *intf;
   struct urb            *urb;
@@ -66,8 +64,6 @@ static void guncon2_usb_irq(struct urb *urb)
   unsigned char *data = urb->transfer_buffer;
   int error;
   unsigned short x, y, norm_x, norm_y;
-  signed char hat_x = 0;
-  signed char hat_y = 0;
   int trigger;
   bool offscreen;
 
@@ -110,7 +106,6 @@ static void guncon2_usb_irq(struct urb *urb)
         /* if the gun is pointed off screen */
         input_report_key(guncon2->mouse, BTN_LEFT, 0);         /* trigger */
         input_report_key(guncon2->mouse, BTN_RIGHT, trigger);  /* reload */
-        /* TODO: report that pointer is off screen */
       } else {
         /* on screen */
         input_report_key(guncon2->mouse, BTN_LEFT, trigger);     /* trigger */
@@ -120,46 +115,18 @@ static void guncon2_usb_irq(struct urb *urb)
       input_report_key(guncon2->mouse, BTN_LEFT, trigger);
     }
 
+    /* TODO: report that pointer is off screen */
     if (!offscreen) {
-        /* only update the position if the gun is on screen */
-        if (raw) {
-          input_report_abs(guncon2->mouse, ABS_X, x);
-          input_report_abs(guncon2->mouse, ABS_Y, y);
-        } else {
-          norm_x = (ushort) ((x - calibration_x0) * 1024 ) / (calibration_x1 - calibration_x0);
-          norm_y = (ushort) ((y - calibration_y0) * 255 ) / (calibration_y1 - calibration_y0);
+      /* only update the position if the gun is on screen */
+      norm_x = (ushort)(((x - calibration_x0) * AXIS_MAX) / (calibration_x1 - calibration_x0));
+      norm_y = (ushort)(((y - calibration_y0) * AXIS_MAX) / (calibration_y1 - calibration_y0));
 
-          input_report_abs(guncon2->mouse, ABS_X, norm_x);
-          input_report_abs(guncon2->mouse, ABS_Y, norm_y);
-        }
+      input_report_abs(guncon2->mouse, ABS_X, norm_x);
+      input_report_abs(guncon2->mouse, ABS_Y, norm_y);
     }
-
+    
     kernel_param_unlock(THIS_MODULE);
 
-    // d-pad
-    if (!(data[0] & BIT(7))) { // left
-      hat_x -= 1;
-    }
-    if (!(data[0] & BIT(5))) { // right
-      hat_x += 1;
-    }
-    if (!(data[0] & BIT(4))) { // up
-      hat_y -= 1;
-    }
-    if (!(data[0] & BIT(6))) { // down
-      hat_y += 1;
-    }
-    input_report_abs(guncon2->js, ABS_HAT0X, hat_x);
-    input_report_abs(guncon2->js, ABS_HAT0Y, hat_y);
-
-    // main buttons
-    input_report_key(guncon2->js, BTN_A,       !(data[0] & BIT(3)));
-    input_report_key(guncon2->js, BTN_B,       !(data[0] & BIT(2)));
-    input_report_key(guncon2->js, BTN_C,       !(data[0] & BIT(1)));
-    input_report_key(guncon2->js, BTN_START,   !(data[1] & BIT(7)));
-    input_report_key(guncon2->js, BTN_SELECT,  !(data[1] & BIT(6)));
-
-    input_sync(guncon2->js);
     input_sync(guncon2->mouse);
   }
 
@@ -184,8 +151,8 @@ static int guncon2_open(struct input_dev *input)
   if (!gmode)
     return -ENOMEM;
 
+  /* set the mode to normal 50Hz mode */
   gmode->mode = 1;
-
   usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
       0x21, 0x09, 0x200, 0, gmode, sizeof(*gmode), 100000);
 
@@ -271,14 +238,6 @@ static int guncon2_probe(struct usb_interface *intf,
                    usb_rcvintpipe(udev, epirq->bEndpointAddress),
                    xfer_buf, xfer_size, guncon2_usb_irq, guncon2, 1);
 
-  guncon2->js = devm_input_allocate_device(&intf->dev);
-  if (!guncon2->js) {
-    dev_err(&intf->dev, "couldn't allocate js input device\n");
-    return -ENOMEM;
-  }
-
-  guncon2->js->name = "Namco GunCon 2";
-
   guncon2->mouse = devm_input_allocate_device(&intf->dev);
   if (!guncon2->mouse) {
     dev_err(&intf->dev, "couldn't allocate mouse input device\n");
@@ -289,30 +248,11 @@ static int guncon2_probe(struct usb_interface *intf,
 
   usb_make_path(udev, guncon2->phys, sizeof(guncon2->phys));
   strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
-  guncon2->js->phys = guncon2->phys;
-  usb_to_input_id(udev, &guncon2->js->id);
-
-  usb_make_path(udev, guncon2->phys, sizeof(guncon2->phys));
-  strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
   guncon2->mouse->phys = guncon2->phys;
   usb_to_input_id(udev, &guncon2->mouse->id);
 
-  guncon2->js->open = guncon2_open;
-  guncon2->js->close = guncon2_close;
-
-
-  input_set_capability(guncon2->js, EV_KEY, BTN_A);
-  input_set_capability(guncon2->js, EV_KEY, BTN_B);
-  input_set_capability(guncon2->js, EV_KEY, BTN_C);
-  input_set_capability(guncon2->js, EV_KEY, BTN_START);
-  input_set_capability(guncon2->js, EV_KEY, BTN_SELECT);
-
-  input_set_capability(guncon2->js, EV_ABS, ABS_HAT0X);
-  input_set_capability(guncon2->js, EV_ABS, ABS_HAT0Y);
-
-  // d pad
-  input_set_abs_params(guncon2->js, ABS_HAT0X, -1, 1, 0, 0);
-  input_set_abs_params(guncon2->js, ABS_HAT0Y, -1, 1, 0, 0);
+  guncon2->mouse->open = guncon2_open;
+  guncon2->mouse->close = guncon2_close;
 
 
   // Pointer related
@@ -323,16 +263,11 @@ static int guncon2_probe(struct usb_interface *intf,
 
   input_set_capability(guncon2->mouse, EV_ABS, ABS_X);
   input_set_capability(guncon2->mouse, EV_ABS, ABS_Y);
-  // These ranges have been determined by experimentation
-                                        /* min, max, fuzz, flat */
-  input_set_abs_params(guncon2->mouse, ABS_X, 0, 1024, 0, 0);
-  input_set_abs_params(guncon2->mouse, ABS_Y, 0, 255, 0, 0);
 
-  input_set_drvdata(guncon2->js, guncon2);
-
-  error = input_register_device(guncon2->js);
-  if (error)
-    return error;
+  /* these ranges are the normalised ranges */
+                                           /* min, max, fuzz, flat */
+  input_set_abs_params(guncon2->mouse, ABS_X, 0, AXIS_MAX, 0, 0);
+  input_set_abs_params(guncon2->mouse, ABS_Y, 0, AXIS_MAX, 0, 0);
 
   error = input_register_device(guncon2->mouse);
   if (error)
