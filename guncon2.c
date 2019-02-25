@@ -21,22 +21,18 @@
 #define NAMCO_VENDOR_ID     0x0b9a
 #define GUNCON2_PRODUCT_ID  0x016a
 
-#define X_AXIS_MAX 800
-#define Y_AXIS_MAX 255
+#define AXIS_MAX (1<<16) - 1
 
-static bool offscreen_reload = 0;
 static ushort calibration_x0 = 80;
 static ushort calibration_x1 = 734;
 static ushort calibration_y0 = 0;
 static ushort calibration_y1 = 240;
 
-module_param(offscreen_reload, bool, 0644);
 module_param(calibration_x0, ushort, 0644);
 module_param(calibration_x1, ushort, 0644);
 module_param(calibration_y0, ushort, 0644);
 module_param(calibration_y1, ushort, 0644);
 
-MODULE_PARM_DESC(offscreen_reload, "Enable off-screen reload");
 MODULE_PARM_DESC(calibration_x0, "Lower x calibration value");
 MODULE_PARM_DESC(calibration_y0, "Lower y calibration value");
 MODULE_PARM_DESC(calibration_x1, "Upper x calibration value");
@@ -64,7 +60,8 @@ static void guncon2_usb_irq(struct urb *urb)
   struct guncon2 *guncon2 = urb->context;
   unsigned char *data = urb->transfer_buffer;
   int error;
-  unsigned short x, y, norm_x, norm_y;
+  unsigned short x, y;
+  int norm_x, norm_y;
   int trigger;
   bool offscreen;
 
@@ -102,27 +99,15 @@ static void guncon2_usb_irq(struct urb *urb)
 
     offscreen = (x < calibration_x0 || x > calibration_x1 || y < calibration_y0 || y > calibration_y1);
 
-    if (offscreen_reload) {
-      if (offscreen) {
-        /* if the gun is pointed off screen */
-        input_report_key(guncon2->mouse, BTN_LEFT, 0);         /* trigger */
-        input_report_key(guncon2->mouse, BTN_RIGHT, trigger);  /* reload */
-      } else {
-        /* on screen */
-        input_report_key(guncon2->mouse, BTN_LEFT, trigger);     /* trigger */
-        input_report_key(guncon2->mouse, BTN_RIGHT, 0);          /* reload */
-      }
+    input_report_key(guncon2->mouse, BTN_LEFT, trigger);
+
+    if (offscreen) {
+      input_report_abs(guncon2->mouse, ABS_X, 0);
+      input_report_abs(guncon2->mouse, ABS_Y, 0);
     } else {
-      input_report_key(guncon2->mouse, BTN_LEFT, trigger);
-    }
-
-    // report cursor on/off screen
-    input_report_key(guncon2->mouse, BTN_TOOL_MOUSE, offscreen ? 0 : 1);
-
-    if (!offscreen) {
       /* only update the position if the gun is on screen */
-      norm_x = (ushort)(((x - calibration_x0) * X_AXIS_MAX) / (calibration_x1 - calibration_x0));
-      norm_y = (ushort)(((y - calibration_y0) * Y_AXIS_MAX) / (calibration_y1 - calibration_y0));
+      norm_x = ((x - calibration_x0) * AXIS_MAX) / (calibration_x1 - calibration_x0);
+      norm_y = ((y - calibration_y0) * AXIS_MAX) / (calibration_y1 - calibration_y0);
 
       input_report_abs(guncon2->mouse, ABS_X, norm_x);
       input_report_abs(guncon2->mouse, ABS_Y, norm_y);
@@ -257,17 +242,15 @@ static int guncon2_probe(struct usb_interface *intf,
   guncon2->mouse->open = guncon2_open;
   guncon2->mouse->close = guncon2_close;
 
-  input_set_capability(guncon2->mouse, EV_KEY, BTN_TOOL_MOUSE);
-  input_set_capability(guncon2->mouse, EV_KEY, BTN_LEFT);   /* regular trigger */
-  input_set_capability(guncon2->mouse, EV_KEY, BTN_RIGHT);  /* off-screen trigger */
+  input_set_capability(guncon2->mouse, EV_KEY, BTN_LEFT);
 
   input_set_capability(guncon2->mouse, EV_ABS, ABS_X);
   input_set_capability(guncon2->mouse, EV_ABS, ABS_Y);
 
   /* these ranges are the normalised ranges, with aprox. 1% fuzz */
                                            /* min, max, fuzz, flat */
-  input_set_abs_params(guncon2->mouse, ABS_X, 0, X_AXIS_MAX, 8, 0);
-  input_set_abs_params(guncon2->mouse, ABS_Y, 0, Y_AXIS_MAX, 3, 0);
+  input_set_abs_params(guncon2->mouse, ABS_X, 0, AXIS_MAX, 10, 0);
+  input_set_abs_params(guncon2->mouse, ABS_Y, 0, AXIS_MAX, 10, 0);
 
   input_set_drvdata(guncon2->mouse, guncon2);
 
