@@ -69,6 +69,10 @@ static void guncon2_usb_irq(struct urb *urb)
     y = data[4];
     trigger = !(data[1] & BIT(5));
 
+
+    input_report_abs(guncon2->js, ABS_HAT1X, x);
+    input_report_abs(guncon2->js, ABS_HAT1Y, y);
+
     input_report_key(guncon2->js, BTN_TL, trigger);         /* trigger */
 
     // d-pad
@@ -219,10 +223,16 @@ static int guncon2_probe(struct usb_interface *intf,
 
   input_set_capability(guncon2->js, EV_ABS, ABS_HAT0X);
   input_set_capability(guncon2->js, EV_ABS, ABS_HAT0Y);
+  input_set_capability(guncon2->js, EV_ABS, ABS_HAT1X);
+  input_set_capability(guncon2->js, EV_ABS, ABS_HAT1Y);
+
+  // screen position
+  input_set_abs_params(guncon2->js, ABS_HAT0X, 0, 1024, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_HAT0Y, 0, 255, 0, 0);
 
   // d pad
-  input_set_abs_params(guncon2->js, ABS_HAT0X, -1, 1, 0, 0);
-  input_set_abs_params(guncon2->js, ABS_HAT0Y, -1, 1, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_HAT1X, -1, 1, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_HAT1Y, -1, 1, 0, 0);
 
   input_set_drvdata(guncon2->js, guncon2);
 
