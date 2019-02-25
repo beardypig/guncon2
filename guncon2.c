@@ -116,7 +116,9 @@ static void guncon2_usb_irq(struct urb *urb)
       input_report_key(guncon2->mouse, BTN_LEFT, trigger);
     }
 
-    /* TODO: report that pointer is off screen */
+    // report cursor on/off screen
+    input_report_key(guncon2->mouse, BTN_TOOL_MOUSE, offscreen ? 0 : 1);
+
     if (!offscreen) {
       /* only update the position if the gun is on screen */
       norm_x = (ushort)(((x - calibration_x0) * X_AXIS_MAX) / (calibration_x1 - calibration_x0));
@@ -255,10 +257,7 @@ static int guncon2_probe(struct usb_interface *intf,
   guncon2->mouse->open = guncon2_open;
   guncon2->mouse->close = guncon2_close;
 
-
-  // Pointer related
-  __set_bit(INPUT_PROP_DIRECT, guncon2->mouse->propbit);
-
+  input_set_capability(guncon2->mouse, EV_KEY, BTN_TOOL_MOUSE);
   input_set_capability(guncon2->mouse, EV_KEY, BTN_LEFT);   /* regular trigger */
   input_set_capability(guncon2->mouse, EV_KEY, BTN_RIGHT);  /* off-screen trigger */
 
