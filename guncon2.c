@@ -155,7 +155,7 @@ static int guncon2_open(struct input_dev *input)
   /* set the mode to normal 50Hz mode */
   gmode[5] = 1;
   usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
-      0x21, 0x09, 0x200, 0, gmode, 6, 100000);
+      0x09, 0x21, 0x200, 0, gmode, 6, 100000);
 
   kfree(gmode);
 
