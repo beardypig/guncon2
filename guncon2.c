@@ -67,7 +67,7 @@ static void guncon2_usb_irq(struct urb *urb)
 {
   struct guncon2 *guncon2 = urb->context;
   unsigned char *data = urb->transfer_buffer;
-  int error;
+  int error, buttons;
   unsigned short x, y;
   signed char hat_x = 0;
   signed char hat_y = 0;
@@ -107,29 +107,31 @@ static void guncon2_usb_irq(struct urb *urb)
     input_sync(guncon2->mouse);
 
     /* Buttons */
-    input_report_key(guncon2->js, BTN_TRIGGER, !(data[1] & BIT(5)));
+    buttons = ((data[0] << 8) | data[1]) ^ 0xffff;
+
     // d-pad
-    if (!(data[0] & BIT(7))) { // left
+    if (buttons & BIT(15)) { // left
       hat_x -= 1;
     }
-    if (!(data[0] & BIT(5))) { // right
+    if (buttons & BIT(13)) { // right
       hat_x += 1;
     }
-    if (!(data[0] & BIT(4))) { // up
+    if (buttons & BIT(12)) { // up
       hat_y -= 1;
     }
-    if (!(data[0] & BIT(6))) { // down
+    if (buttons & BIT(14)) { // down
       hat_y += 1;
     }
     input_report_abs(guncon2->js, ABS_HAT0X, hat_x);
     input_report_abs(guncon2->js, ABS_HAT0Y, hat_y);
 
     // main buttons
-    input_report_key(guncon2->js, BTN_A,       !(data[0] & BIT(3)));
-    input_report_key(guncon2->js, BTN_B,       !(data[0] & BIT(2)));
-    input_report_key(guncon2->js, BTN_C,       !(data[0] & BIT(1)));
-    input_report_key(guncon2->js, BTN_START,   !(data[1] & BIT(7)));
-    input_report_key(guncon2->js, BTN_SELECT,  !(data[1] & BIT(6)));
+    input_report_key(guncon2->js, BTN_TRIGGER, buttons & BIT(5));
+    input_report_key(guncon2->js, BTN_A,       buttons & BIT(11));
+    input_report_key(guncon2->js, BTN_B,       buttons & BIT(10));
+    input_report_key(guncon2->js, BTN_C,       buttons & BIT(9));
+    input_report_key(guncon2->js, BTN_START,   buttons & BIT(6));
+    input_report_key(guncon2->js, BTN_SELECT,  buttons & BIT(7));
 
     input_sync(guncon2->js);
   }
@@ -289,6 +291,7 @@ static int guncon2_probe(struct usb_interface *intf,
   guncon2->js->phys = guncon2->phys;
   usb_to_input_id(udev, &guncon2->js->id);
 
+  input_set_capability(guncon2->js, EV_KEY, BTN_TRIGGER);
   input_set_capability(guncon2->js, EV_KEY, BTN_A);
   input_set_capability(guncon2->js, EV_KEY, BTN_B);
   input_set_capability(guncon2->js, EV_KEY, BTN_C);
