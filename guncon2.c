@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Driver for Namco GunCon 2 USB light gun
- *
- * Based on the PXRC driver by Marcus Folkesson <marcus.folkesson@gmail.com>
- *
  * Copyright (C) 2019 beardypig <beardypig@protonmail.com>
+ *
+ * Based largely on the PXRC driver by Marcus Folkesson <marcus.folkesson@gmail.com>
+ *
+ * The device driver creates two input devices, one "absolute mouse" and one joystick.
+ *
+ * The absolute mouse reports ABS_X and ABS_Y positions, it also has a BTN_LEFT that is
+ * unused. The ABS_X and ABX_Y position reported by the device are raw values from the
+ * GunCon 2. The min and max values for ABS_X and ABS_Y can be changed with the module
+ * parameters x_min, x_max and y_min, y_max.
+ *
+ * The joystick device reports all the button presses, include trigger.
+ *
  */
-#define DEBUG 1
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/slab.h>
@@ -21,23 +29,24 @@
 #define NAMCO_VENDOR_ID     0x0b9a
 #define GUNCON2_PRODUCT_ID  0x016a
 
-static ushort calibration_x0 = 80;
-static ushort calibration_x1 = 734;
-static ushort calibration_y0 = 0;
-static ushort calibration_y1 = 240;
+static ushort x_min = 80;
+static ushort x_max = 734;
+static ushort y_min = 0;
+static ushort y_max = 240;
 
 /* TODO: enable write bit for these */
-module_param(calibration_x0, ushort, 0444);
-module_param(calibration_x1, ushort, 0444);
-module_param(calibration_y0, ushort, 0444);
-module_param(calibration_y1, ushort, 0444);
+module_param(x_min, ushort, 0444);
+module_param(x_max, ushort, 0444);
+module_param(y_min, ushort, 0444);
+module_param(y_max, ushort, 0444);
 
-MODULE_PARM_DESC(calibration_x0, "Lower x calibration value");
-MODULE_PARM_DESC(calibration_y0, "Lower y calibration value");
-MODULE_PARM_DESC(calibration_x1, "Upper x calibration value");
-MODULE_PARM_DESC(calibration_y1, "Upper y calibration value");
+MODULE_PARM_DESC(x_min, "Lower x calibration value");
+MODULE_PARM_DESC(y_min, "Lower y calibration value");
+MODULE_PARM_DESC(x_max, "Upper x calibration value");
+MODULE_PARM_DESC(y_max, "Upper y calibration value");
 
 struct guncon2 {
+  struct input_dev      *js;
   struct input_dev      *mouse;
   struct usb_interface  *intf;
   struct urb            *urb;
@@ -60,9 +69,8 @@ static void guncon2_usb_irq(struct urb *urb)
   unsigned char *data = urb->transfer_buffer;
   int error;
   unsigned short x, y;
-  int norm_x, norm_y;
-  int trigger;
-  bool offscreen;
+  signed char hat_x = 0;
+  signed char hat_y = 0;
 
   switch (urb->status) {
   case 0:
@@ -89,28 +97,41 @@ static void guncon2_usb_irq(struct urb *urb)
   }
 
   if (urb->actual_length == 6) {
-    // Aim and Trigger button
+    /* Aiming */
     x = (data[3] << 8) | data[2];
     y = data[4];
-    trigger = !(data[1] & BIT(5));
 
-    kernel_param_lock(THIS_MODULE);  // lock write access to the module parameters
-
-    offscreen = (x < calibration_x0 || x > calibration_x1 || y < calibration_y0 || y > calibration_y1);
-
-    input_report_key(guncon2->mouse, BTN_LEFT, trigger);
-
-    if (offscreen) {
-      input_report_abs(guncon2->mouse, ABS_X, 0);
-      input_report_abs(guncon2->mouse, ABS_Y, 0);
-    } else {
-      input_report_abs(guncon2->mouse, ABS_X, x);
-      input_report_abs(guncon2->mouse, ABS_Y, y);
-    }
-    
-    kernel_param_unlock(THIS_MODULE);
+    input_report_abs(guncon2->mouse, ABS_X, x);
+    input_report_abs(guncon2->mouse, ABS_Y, y);
 
     input_sync(guncon2->mouse);
+
+    /* Buttons */
+    input_report_key(guncon2->js, BTN_TRIGGER, !(data[1] & BIT(5)));
+    // d-pad
+    if (!(data[0] & BIT(7))) { // left
+      hat_x -= 1;
+    }
+    if (!(data[0] & BIT(5))) { // right
+      hat_x += 1;
+    }
+    if (!(data[0] & BIT(4))) { // up
+      hat_y -= 1;
+    }
+    if (!(data[0] & BIT(6))) { // down
+      hat_y += 1;
+    }
+    input_report_abs(guncon2->js, ABS_HAT0X, hat_x);
+    input_report_abs(guncon2->js, ABS_HAT0Y, hat_y);
+
+    // main buttons
+    input_report_key(guncon2->js, BTN_A,       !(data[0] & BIT(3)));
+    input_report_key(guncon2->js, BTN_B,       !(data[0] & BIT(2)));
+    input_report_key(guncon2->js, BTN_C,       !(data[0] & BIT(1)));
+    input_report_key(guncon2->js, BTN_START,   !(data[1] & BIT(7)));
+    input_report_key(guncon2->js, BTN_SELECT,  !(data[1] & BIT(6)));
+
+    input_sync(guncon2->js);
   }
 
   exit:
@@ -195,6 +216,7 @@ static int guncon2_probe(struct usb_interface *intf,
     return error;
   }
 
+  /* Allocate memory for the guncon2 struct using devm */
   guncon2 = devm_kzalloc(&intf->dev, sizeof(*guncon2), GFP_KERNEL);
   if (!guncon2)
     return -ENOMEM;
@@ -217,37 +239,72 @@ static int guncon2_probe(struct usb_interface *intf,
   if (error)
     return error;
 
+  /* set to URB for the interrupt interface  */
   usb_fill_int_urb(guncon2->urb, udev,
                    usb_rcvintpipe(udev, epirq->bEndpointAddress),
                    xfer_buf, xfer_size, guncon2_usb_irq, guncon2, 1);
 
+  /* get path tree for the usb device */
+  usb_make_path(udev, guncon2->phys, sizeof(guncon2->phys));
+  strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
+
+  /* Aiming related */
   guncon2->mouse = devm_input_allocate_device(&intf->dev);
   if (!guncon2->mouse) {
     dev_err(&intf->dev, "couldn't allocate mouse input device\n");
     return -ENOMEM;
   }
 
-  guncon2->mouse->name = "Namco GunCon 2 (pointer)";
-
-  usb_make_path(udev, guncon2->phys, sizeof(guncon2->phys));
-  strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
+  guncon2->mouse->name = "Namco GunCon 2 (aiming)";
   guncon2->mouse->phys = guncon2->phys;
   usb_to_input_id(udev, &guncon2->mouse->id);
 
   guncon2->mouse->open = guncon2_open;
   guncon2->mouse->close = guncon2_close;
 
+  /* the left mouse button event is never generated,
+   * but it is required so that the device appears as a mouse */
   input_set_capability(guncon2->mouse, EV_KEY, BTN_LEFT);
 
   input_set_capability(guncon2->mouse, EV_ABS, ABS_X);
   input_set_capability(guncon2->mouse, EV_ABS, ABS_Y);
 
-  input_set_abs_params(guncon2->mouse, ABS_X, calibration_x0, calibration_x1, 0, 0);
-  input_set_abs_params(guncon2->mouse, ABS_Y, calibration_y0, calibration_y1, 0, 0);
+  input_set_abs_params(guncon2->mouse, ABS_X, x_min, x_max, 0, 0);
+  input_set_abs_params(guncon2->mouse, ABS_Y, y_min, y_max, 0, 0);
 
   input_set_drvdata(guncon2->mouse, guncon2);
 
   error = input_register_device(guncon2->mouse);
+  if (error)
+    return error;
+
+  /* Button related */
+  guncon2->js = devm_input_allocate_device(&intf->dev);
+  if (!guncon2->js) {
+    dev_err(&intf->dev, "couldn't allocate js input device\n");
+    return -ENOMEM;
+  }
+
+  guncon2->js->name = "Namco GunCon 2";
+  guncon2->js->phys = guncon2->phys;
+  usb_to_input_id(udev, &guncon2->js->id);
+
+  input_set_capability(guncon2->js, EV_KEY, BTN_A);
+  input_set_capability(guncon2->js, EV_KEY, BTN_B);
+  input_set_capability(guncon2->js, EV_KEY, BTN_C);
+  input_set_capability(guncon2->js, EV_KEY, BTN_START);
+  input_set_capability(guncon2->js, EV_KEY, BTN_SELECT);
+
+  input_set_capability(guncon2->js, EV_ABS, ABS_HAT0X);
+  input_set_capability(guncon2->js, EV_ABS, ABS_HAT0Y);
+
+  // d pad
+  input_set_abs_params(guncon2->js, ABS_HAT0X, -1, 1, 0, 0);
+  input_set_abs_params(guncon2->js, ABS_HAT0Y, -1, 1, 0, 0);
+
+  input_set_drvdata(guncon2->js, guncon2);
+
+  error = input_register_device(guncon2->js);
   if (error)
     return error;
 
