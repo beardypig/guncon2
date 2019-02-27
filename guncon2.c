@@ -5,15 +5,6 @@
  *
  * Based largely on the PXRC driver by Marcus Folkesson <marcus.folkesson@gmail.com>
  *
- * The device driver creates two input devices, one "absolute mouse" and one joystick.
- *
- * The absolute mouse reports ABS_X and ABS_Y positions, it also has a BTN_LEFT that is
- * unused. The ABS_X and ABX_Y position reported by the device are raw values from the
- * GunCon 2. The min and max values for ABS_X and ABS_Y can be changed with the module
- * parameters x_min, x_max and y_min, y_max.
- *
- * The joystick device reports all the button presses, include trigger.
- *
  */
 #include <linux/kernel.h>
 #include <linux/errno.h>
