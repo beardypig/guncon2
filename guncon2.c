@@ -21,17 +21,16 @@
 #define NAMCO_VENDOR_ID     0x0b9a
 #define GUNCON2_PRODUCT_ID  0x016a
 
-#define AXIS_MAX (1<<16) - 1
-
 static ushort calibration_x0 = 80;
 static ushort calibration_x1 = 734;
 static ushort calibration_y0 = 0;
 static ushort calibration_y1 = 240;
 
-module_param(calibration_x0, ushort, 0644);
-module_param(calibration_x1, ushort, 0644);
-module_param(calibration_y0, ushort, 0644);
-module_param(calibration_y1, ushort, 0644);
+/* TODO: enable write bit for these */
+module_param(calibration_x0, ushort, 0444);
+module_param(calibration_x1, ushort, 0444);
+module_param(calibration_y0, ushort, 0444);
+module_param(calibration_y1, ushort, 0444);
 
 MODULE_PARM_DESC(calibration_x0, "Lower x calibration value");
 MODULE_PARM_DESC(calibration_y0, "Lower y calibration value");
@@ -105,12 +104,8 @@ static void guncon2_usb_irq(struct urb *urb)
       input_report_abs(guncon2->mouse, ABS_X, 0);
       input_report_abs(guncon2->mouse, ABS_Y, 0);
     } else {
-      /* only update the position if the gun is on screen */
-      norm_x = ((x - calibration_x0) * AXIS_MAX) / (calibration_x1 - calibration_x0);
-      norm_y = ((y - calibration_y0) * AXIS_MAX) / (calibration_y1 - calibration_y0);
-
-      input_report_abs(guncon2->mouse, ABS_X, norm_x);
-      input_report_abs(guncon2->mouse, ABS_Y, norm_y);
+      input_report_abs(guncon2->mouse, ABS_X, x);
+      input_report_abs(guncon2->mouse, ABS_Y, y);
     }
     
     kernel_param_unlock(THIS_MODULE);
@@ -247,10 +242,8 @@ static int guncon2_probe(struct usb_interface *intf,
   input_set_capability(guncon2->mouse, EV_ABS, ABS_X);
   input_set_capability(guncon2->mouse, EV_ABS, ABS_Y);
 
-  /* these ranges are the normalised ranges, with aprox. 1% fuzz */
-                                           /* min, max, fuzz, flat */
-  input_set_abs_params(guncon2->mouse, ABS_X, 0, AXIS_MAX, 10, 0);
-  input_set_abs_params(guncon2->mouse, ABS_Y, 0, AXIS_MAX, 10, 0);
+  input_set_abs_params(guncon2->mouse, ABS_X, calibration_x0, calibration_x1, 0, 0);
+  input_set_abs_params(guncon2->mouse, ABS_Y, calibration_y0, calibration_y1, 0, 0);
 
   input_set_drvdata(guncon2->mouse, guncon2);
 
