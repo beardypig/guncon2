@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Driver for Namco GunCon 2 USB light gun
- * Copyright (C) 2019 beardypig <beardypig@protonmail.com>
+ * Copyright (C) 2019-2021 beardypig <beardypig@protonmail.com>
  *
  * Based largely on the PXRC driver by Marcus Folkesson <marcus.folkesson@gmail.com>
  *
@@ -350,6 +350,6 @@ static struct usb_driver guncon2_driver = {
 
 module_usb_driver(guncon2_driver);
 
-MODULE_AUTHOR("beardypig <beardypig@protonmail.com.com>");
+MODULE_AUTHOR("beardypig <beardypig@protonmail.com>");
 MODULE_DESCRIPTION("Namco GunCon 2");
 MODULE_LICENSE("GPL v2");
