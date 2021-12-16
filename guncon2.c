@@ -31,22 +31,11 @@
 #define GUNCON2_BTN_START BIT(7)
 #define GUNCON2_BTN_SELECT BIT(6)
 
-
-static ushort x_min = 80;
-static ushort x_max = 734;
-static ushort y_min = 32;
-static ushort y_max = 240;
-
-/* TODO: enable write bit for these */
-module_param(x_min, ushort, 0444);
-module_param(x_max, ushort, 0444);
-module_param(y_min, ushort, 0444);
-module_param(y_max, ushort, 0444);
-
-MODULE_PARM_DESC(x_min, "Lower x calibration value");
-MODULE_PARM_DESC(y_min, "Lower y calibration value");
-MODULE_PARM_DESC(x_max, "Upper x calibration value");
-MODULE_PARM_DESC(y_max, "Upper y calibration value");
+// default calibration, can be updated with evdev-joystick
+#define X_MIN 175
+#define X_MAX 720
+#define Y_MIN 20
+#define Y_MAX 240
 
 struct guncon2 {
     struct input_dev *input_device;
@@ -264,8 +253,8 @@ static int guncon2_probe(struct usb_interface *intf,
     input_set_capability(guncon2->input_device, EV_ABS, ABS_X);
     input_set_capability(guncon2->input_device, EV_ABS, ABS_Y);
 
-    input_set_abs_params(guncon2->input_device, ABS_X, x_min, x_max, 2, 0);
-    input_set_abs_params(guncon2->input_device, ABS_Y, y_min, y_max, 2, 0);
+    input_set_abs_params(guncon2->input_device, ABS_X, X_MIN, X_MAX, 0, 0);
+    input_set_abs_params(guncon2->input_device, ABS_Y, Y_MIN, Y_MAX, 0, 0);
 
     input_set_capability(guncon2->input_device, EV_KEY, BTN_A);
     input_set_capability(guncon2->input_device, EV_KEY, BTN_B);
