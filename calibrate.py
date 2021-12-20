@@ -67,27 +67,33 @@ class Guncon2(object):
             else:
                 break
 
-    def calibrate(self, center_shot, topleft_shot, center_target, topleft_target):
-        def calibrate_i(i):
-            sdimension = float(center_target[i] * 2)  # width/height depending
-            # calculate the width/height of the guncon view
-            gdemension = (center_shot[i] - topleft_shot[i]) / ((center_target[i] / sdimension) - (topleft_target[i] / sdimension))
-            # calculate the zero offset for the guncon view
-            zero = center_shot[i] - (gdemension / 2.0)
-            return int(floor(zero)), int(ceil(zero + gdemension))
+    def calibrate(self, targets, shots, width=320, height=240):
+        targets_x = [target[0] for target in targets]
+        targets_y = [target[1] for target in targets]
+        shots_x = [shot[0] for shot in shots]
+        shots_y = [shot[1] for shot in shots]
 
+        # calculate the ratio between on-screen units and gun units for each axes
         try:
-            min_x, max_x = calibrate_i(0)
-            # set the X calibration values
-            self.device.set_absinfo(ecodes.ABS_X, min=min_x, max=max_x)
+            gsratio_x = (max(targets_x) - min(targets_x)) / (max(shots_x) - min(shots_x))
         except ZeroDivisionError:
             log.error("Failed to calibrate X axis")
+            return
         try:
-            min_y, max_y = calibrate_i(1)
-            # set the Y calibration values
-            self.device.set_absinfo(ecodes.ABS_Y, min=min_y, max=max_y)
+            gsratio_y = (max(targets_y) - min(targets_y)) / (max(shots_y) - min(shots_y))
         except ZeroDivisionError:
             log.error("Failed to calibrate X axis")
+            return
+
+        min_x = min(shots_x) - (min(targets_x) * gsratio_x)
+        max_x = max(shots_x) + ((width - max(targets_x)) * gsratio_x)
+
+        min_y = min(shots_y) - (min(targets_x) * gsratio_x)
+        max_y = max(shots_y) + ((height - max(targets_y)) * gsratio_y)
+
+        # set the X and Y calibration values
+        self.device.set_absinfo(ecodes.ABS_X, min=int(min_x), max=int(max_x))
+        self.device.set_absinfo(ecodes.ABS_Y, min=int(min_y), max=int(max_y))
 
         log.info(f"Calibration: x=({self.absinfo[0]}) y=({self.absinfo[1]})")
 
@@ -99,8 +105,7 @@ WHITE = (255, 255, 255)
 GREY = (128, 128, 128)
 
 STATE_START = 0
-STATE_TARGET_0 = 1
-STATE_TARGET_1 = 2
+STATE_TARGET = 1
 STATE_DONE = 3
 
 
@@ -160,7 +165,6 @@ def main():
         parser.error("Invalid resolution, eg. 320x240")
         return
 
-
     guncon2_dev = None
     # find the first guncon2
     for device in [evdev.InputDevice(path) for path in evdev.list_devices()]:
@@ -190,11 +194,8 @@ def main():
 
         state = STATE_START
         running = True
-        center_shot, topleft_shot = (0, 0), (0, 0)
-        center_target, topleft_target = args.center_target, args.topleft_target
-
-        log.info("Set center target at:   ({}, {})".format(*center_target))
-        log.info("Set top-left target at: ({}, {})".format(*topleft_target))
+        targets = [(50, 50), (320 - 50, 50), (320 - 50, 240 - 50), (50, 240 - 50)]
+        target_shots = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
         cursor = draw_cursor(color=(255, 255, 0))
         target = draw_target()
@@ -217,34 +218,31 @@ def main():
             raw_pos_txt = font.render(f"({raw_x}, {raw_x})", True, (128, 128, 255))
             cal_pos_txt = font.render(f"({cx}, {cy})", True, (128, 128, 255))
 
-            shot_c_txt = font.render("({}, {})".format(*center_shot), True, (128, 128, 255))
-            shot_l_txt = font.render("({}, {})".format(*topleft_shot), True, (128, 128, 255))
-
             screen.blit(raw_pos_txt, (20, height - 40))
             blit_right(screen, cal_pos_txt, (width - 20, height - 40))
-
-            blit_right(screen, shot_c_txt, (width - 20, 20))
-            blit_right(screen, shot_l_txt, (width - 20, 40))
 
             if state == STATE_START:
                 screen.blit(start_text, ((width // 2) - start_text_w, height - 60))
                 if width > cx >= 0 and height > cy >= 0:  # on screen
                     screen.blit(cursor, (cx, cy))
                 if trigger:
-                    state = STATE_TARGET_0
+                    state = STATE_TARGET
+                    target_i = 0
+                    log.info("Set target at: ({}, {})".format(*targets[target_i]))
 
-            elif state == STATE_TARGET_0:
-                blit_center(screen, target, center_target)
+            elif state == STATE_TARGET:
+                blit_center(screen, target, targets[target_i])
                 if raw_x > 5 and trigger:
-                    center_shot = (raw_x, raw_y)
-                    state = STATE_TARGET_1
+                    target_shots[target_i] = (raw_x, raw_y)
+                    target_i += 1
+                    if target_i == len(targets):
+                        state = STATE_DONE
+                    else:
+                        log.info("Set target at: ({}, {})".format(*targets[target_i]))
 
-            elif state == STATE_TARGET_1:
-                blit_center(screen, target, topleft_target)
-                if raw_x > 5 and trigger:
-                    topleft_shot = (raw_x, raw_y)
-                    state = STATE_START
-                    guncon.calibrate(center_shot, topleft_shot, center_target, topleft_target)
+            elif state == STATE_DONE:
+                guncon.calibrate(targets, target_shots)
+                state = STATE_START
 
             # only trigger off screen shot on target states
             if raw_x < 5 and trigger and state != STATE_START:
