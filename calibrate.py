@@ -88,7 +88,7 @@ class Guncon2(object):
         min_x = min(shots_x) - (min(targets_x) * gsratio_x)
         max_x = max(shots_x) + ((width - max(targets_x)) * gsratio_x)
 
-        min_y = min(shots_y) - (min(targets_x) * gsratio_x)
+        min_y = min(shots_y) - (min(targets_y) * gsratio_y)
         max_y = max(shots_y) + ((height - max(targets_y)) * gsratio_y)
 
         # set the X and Y calibration values
