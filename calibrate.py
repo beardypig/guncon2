@@ -215,7 +215,7 @@ def main():
                 if button == ecodes.BTN_LEFT and value == 1:
                     trigger = True
 
-            raw_pos_txt = font.render(f"({raw_x}, {raw_x})", True, (128, 128, 255))
+            raw_pos_txt = font.render(f"({raw_x}, {raw_y})", True, (128, 128, 255))
             cal_pos_txt = font.render(f"({cx}, {cy})", True, (128, 128, 255))
 
             screen.blit(raw_pos_txt, (20, height - 40))
