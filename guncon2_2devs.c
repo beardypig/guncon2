@@ -115,11 +115,13 @@ static void guncon2_usb_irq(struct urb *urb) {
 
         // main buttons
         input_report_key(guncon2->input_device, BTN_LEFT, buttons & GUNCON2_TRIGGER);
-        input_report_key(guncon2->input_device, BTN_RIGHT, buttons & GUNCON2_BTN_A || buttons & GUNCON2_BTN_C);
+        input_report_key(guncon2->input_device, BTN_RIGHT, buttons & GUNCON2_BTN_A);
         input_report_key(guncon2->input_device, BTN_MIDDLE, buttons & GUNCON2_BTN_B);
         input_report_key(guncon2->input_device, BTN_A, buttons & GUNCON2_BTN_A);
         input_report_key(guncon2->input_device, BTN_B, buttons & GUNCON2_BTN_B);
         input_report_key(guncon2->input_device, BTN_C, buttons & GUNCON2_BTN_C);
+        //input_report_key(guncon2->input_device, BTN_X, buttons & GUNCON2_BTN_C);
+        //input_report_key(guncon2->input_device, BTN_Z, buttons & GUNCON2_TRIGGER);
         input_report_key(guncon2->input_device, BTN_START, buttons & GUNCON2_BTN_START);
         input_report_key(guncon2->input_device, BTN_SELECT, buttons & GUNCON2_BTN_SELECT);
 
@@ -187,6 +189,7 @@ static int guncon2_probe(struct usb_interface *intf,
                          const struct usb_device_id *id) {
     struct usb_device *udev = interface_to_usbdev(intf);
     struct guncon2 *guncon2;
+    struct guncon2 *guncon2aim;
     struct usb_endpoint_descriptor *epirq;
     size_t xfer_size;
     void *xfer_buf;
@@ -207,11 +210,24 @@ static int guncon2_probe(struct usb_interface *intf,
     guncon2 = devm_kzalloc(&intf->dev, sizeof(*guncon2), GFP_KERNEL);
     if (!guncon2)
         return -ENOMEM;
+    guncon2aim = devm_kzalloc(&intf->dev, sizeof(*guncon2aim), GFP_KERNEL);
+    if (!guncon2aim)
+        return -ENOMEM;
 
     mutex_init(&guncon2->pm_mutex);
     guncon2->intf = intf;
-
+    
     usb_set_intfdata(guncon2->intf, guncon2);
+    
+    xfer_size = usb_endpoint_maxp(epirq);
+    xfer_buf = devm_kmalloc(&intf->dev, xfer_size, GFP_KERNEL);
+    if (!xfer_buf)
+        return -ENOMEM;
+
+    mutex_init(&guncon2aim->pm_mutex);
+    guncon2aim->intf = intf;
+
+    usb_set_intfdata(guncon2aim->intf, guncon2aim);
 
     xfer_size = usb_endpoint_maxp(epirq);
     xfer_buf = devm_kmalloc(&intf->dev, xfer_size, GFP_KERNEL);
@@ -222,7 +238,19 @@ static int guncon2_probe(struct usb_interface *intf,
     if (!guncon2->urb)
         return -ENOMEM;
 
+    error = devm_add_action_or_reset(&intf->dev, guncon2_free_urb, guncon2aim);
+    if (error)
+        return error;
+
     error = devm_add_action_or_reset(&intf->dev, guncon2_free_urb, guncon2);
+    if (error)
+        return error;
+
+    guncon2aim->urb = usb_alloc_urb(0, GFP_KERNEL);
+    if (!guncon2aim->urb)
+        return -ENOMEM;
+
+    error = devm_add_action_or_reset(&intf->dev, guncon2_free_urb, guncon2aim);
     if (error)
         return error;
 
@@ -231,9 +259,16 @@ static int guncon2_probe(struct usb_interface *intf,
                      usb_rcvintpipe(udev, epirq->bEndpointAddress),
                      xfer_buf, xfer_size, guncon2_usb_irq, guncon2, 1);
 
+    usb_fill_int_urb(guncon2aim->urb, udev,
+                     usb_rcvintpipe(udev, epirq->bEndpointAddress),
+                     xfer_buf, xfer_size, guncon2_usb_irq, guncon2aim, 1);
+
     /* get path tree for the usb device */
     usb_make_path(udev, guncon2->phys, sizeof(guncon2->phys));
     strlcat(guncon2->phys, "/input0", sizeof(guncon2->phys));
+
+    usb_make_path(udev, guncon2aim->phys, sizeof(guncon2aim->phys));
+    strlcat(guncon2aim->phys, "/input1", sizeof(guncon2aim->phys));
 
     /* Button related */
     guncon2->input_device = devm_input_allocate_device(&intf->dev);
@@ -242,26 +277,43 @@ static int guncon2_probe(struct usb_interface *intf,
         return -ENOMEM;
     }
 
+    guncon2aim->input_device = devm_input_allocate_device(&intf->dev);
+    if (!guncon2aim->input_device) {
+        dev_err(&intf->dev, "couldn't allocate input_device input device\n");
+        return -ENOMEM;
+    }
+
+    guncon2aim->input_device->name = "Namco GunCon 2 Aim";
+    guncon2aim->input_device->phys = guncon2aim->phys;
+    guncon2aim->input_device->open = guncon2_open;
+    guncon2aim->input_device->close = guncon2_close;
+    usb_to_input_id(udev, &guncon2aim->input_device->id);
+
+    input_set_capability(guncon2aim->input_device, EV_KEY, BTN_LEFT);
+    input_set_capability(guncon2aim->input_device, EV_KEY, BTN_RIGHT);
+    input_set_capability(guncon2aim->input_device, EV_KEY, BTN_MIDDLE);
+    input_set_capability(guncon2aim->input_device, EV_ABS, ABS_X);
+    input_set_capability(guncon2aim->input_device, EV_ABS, ABS_Y);
+    input_set_abs_params(guncon2aim->input_device, ABS_X, X_MIN, X_MAX, 0, 0);
+    input_set_abs_params(guncon2aim->input_device, ABS_Y, Y_MIN, Y_MAX, 0, 0);
+
+    input_set_drvdata(guncon2aim->input_device, guncon2aim);
+
+    error = input_register_device(guncon2aim->input_device);
+    if (error)
+        return error;
+
     guncon2->input_device->name = "Namco GunCon 2";
     guncon2->input_device->phys = guncon2->phys;
-
     guncon2->input_device->open = guncon2_open;
     guncon2->input_device->close = guncon2_close;
-
     usb_to_input_id(udev, &guncon2->input_device->id);
-
-    input_set_capability(guncon2->input_device, EV_KEY, BTN_LEFT);
-    input_set_capability(guncon2->input_device, EV_KEY, BTN_RIGHT);
-    input_set_capability(guncon2->input_device, EV_KEY, BTN_MIDDLE);
-    input_set_capability(guncon2->input_device, EV_ABS, ABS_X);
-    input_set_capability(guncon2->input_device, EV_ABS, ABS_Y);
-
-    input_set_abs_params(guncon2->input_device, ABS_X, X_MIN, X_MAX, 0, 0);
-    input_set_abs_params(guncon2->input_device, ABS_Y, Y_MIN, Y_MAX, 0, 0);
 
     input_set_capability(guncon2->input_device, EV_KEY, BTN_A);
     input_set_capability(guncon2->input_device, EV_KEY, BTN_B);
     input_set_capability(guncon2->input_device, EV_KEY, BTN_C);
+    //input_set_capability(guncon2->input_device, EV_KEY, BTN_X);
+    //input_set_capability(guncon2->input_device, EV_KEY, BTN_Z);
     input_set_capability(guncon2->input_device, EV_KEY, BTN_START);
     input_set_capability(guncon2->input_device, EV_KEY, BTN_SELECT);
 

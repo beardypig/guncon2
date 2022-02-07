@@ -113,9 +113,14 @@ static void guncon2_usb_irq(struct urb *urb) {
         input_report_abs(guncon2->input_device, ABS_HAT0X, hat_x);
         input_report_abs(guncon2->input_device, ABS_HAT0Y, hat_y);
 
+        /*input_report_key(guncon2->input_device, BTN_DPAD_UP, buttons & GUNCON2_DPAD_UP);
+        input_report_key(guncon2->input_device, BTN_DPAD_DOWN, buttons & GUNCON2_DPAD_DOWN);
+        input_report_key(guncon2->input_device, BTN_DPAD_LEFT, buttons & GUNCON2_DPAD_LEFT);
+        input_report_key(guncon2->input_device, BTN_DPAD_RIGHT, buttons & GUNCON2_DPAD_RIGHT);*/
+
         // main buttons
         input_report_key(guncon2->input_device, BTN_LEFT, buttons & GUNCON2_TRIGGER);
-        input_report_key(guncon2->input_device, BTN_RIGHT, buttons & GUNCON2_BTN_A || buttons & GUNCON2_BTN_C);
+        input_report_key(guncon2->input_device, BTN_RIGHT, buttons & GUNCON2_BTN_A);
         input_report_key(guncon2->input_device, BTN_MIDDLE, buttons & GUNCON2_BTN_B);
         input_report_key(guncon2->input_device, BTN_A, buttons & GUNCON2_BTN_A);
         input_report_key(guncon2->input_device, BTN_B, buttons & GUNCON2_BTN_B);
@@ -210,9 +215,9 @@ static int guncon2_probe(struct usb_interface *intf,
 
     mutex_init(&guncon2->pm_mutex);
     guncon2->intf = intf;
-
+    
     usb_set_intfdata(guncon2->intf, guncon2);
-
+    
     xfer_size = usb_endpoint_maxp(epirq);
     xfer_buf = devm_kmalloc(&intf->dev, xfer_size, GFP_KERNEL);
     if (!xfer_buf)
@@ -270,6 +275,11 @@ static int guncon2_probe(struct usb_interface *intf,
     input_set_capability(guncon2->input_device, EV_ABS, ABS_HAT0Y);
     input_set_abs_params(guncon2->input_device, ABS_HAT0X, -1, 1, 0, 0);
     input_set_abs_params(guncon2->input_device, ABS_HAT0Y, -1, 1, 0, 0);
+
+    /*input_set_capability(guncon2->input_device, EV_KEY, BTN_DPAD_UP);
+    input_set_capability(guncon2->input_device, EV_KEY, BTN_DPAD_DOWN);
+    input_set_capability(guncon2->input_device, EV_KEY, BTN_DPAD_LEFT);
+    input_set_capability(guncon2->input_device, EV_KEY, BTN_DPAD_RIGHT);*/
 
     input_set_drvdata(guncon2->input_device, guncon2);
 
