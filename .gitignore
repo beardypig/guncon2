@@ -57,3 +57,4 @@ dkms.conf
 CmakeLists.txt
 cmake-build-debug/
 include/
+.push.settings.jsonc
