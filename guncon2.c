@@ -86,7 +86,7 @@ static void guncon2_usb_irq(struct urb *urb) {
             goto exit;
     }
 
-    if (urb->actual_length == 6) {
+    if (urb->actual_length >= 6) {
         /* Aiming */
         x = (data[3] << 8) | data[2];
         y = data[4];
